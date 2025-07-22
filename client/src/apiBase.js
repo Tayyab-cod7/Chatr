@@ -31,9 +31,8 @@ const getApiBase = () => {
     console.log('Using default API URL:', baseUrl);
   }
 
-  const finalUrl = `${baseUrl}`;  // Remove /api since it's now part of the routes
-  console.log('Final API Base URL:', finalUrl);
-  return finalUrl;
+  console.log('Final API Base URL:', baseUrl);
+  return baseUrl;
 };
 
 export default getApiBase; 
