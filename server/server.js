@@ -17,25 +17,26 @@ const app = express();
 const server = http.createServer(app);
 
 // CORS configuration
-const corsOptions = {
-  origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true,
-};
-
-app.use(cors(corsOptions));
+app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Serve static files from the React app
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(path.join(__dirname, '../client/build')));
+}
 
 // Socket.IO configuration
 const io = new Server(server, {
   cors: {
     origin: '*',
     methods: ['GET', 'POST'],
-    credentials: true,
+    credentials: true
   },
   allowEIO3: true,
-  transports: ['websocket', 'polling'],
+  transports: ['polling', 'websocket'],
+  pingTimeout: 60000,
+  pingInterval: 25000
 });
 
 // Ensure uploads directory exists
@@ -49,9 +50,22 @@ const PORT = process.env.PORT || 3020;
 const MONGO_URI = process.env.MONGO_URI;
 const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key';
 
-mongoose.connect(MONGO_URI)
-  .then(() => console.log('MongoDB connected'))
-  .catch(err => console.error('MongoDB connection error:', err));
+// MongoDB connection with retry logic
+const connectDB = async () => {
+  try {
+    await mongoose.connect(MONGO_URI, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+    });
+    console.log('MongoDB connected successfully');
+  } catch (err) {
+    console.error('MongoDB connection error:', err);
+    // Retry connection after 5 seconds
+    setTimeout(connectDB, 5000);
+  }
+};
+
+connectDB();
 
 // Socket.IO connection handling
 io.on('connection', (socket) => {
@@ -95,7 +109,9 @@ io.on('connection', (socket) => {
 });
 
 // API Routes
-app.post('/register', async (req, res) => {
+const apiRouter = express.Router();
+
+apiRouter.post('/register', async (req, res) => {
   const { fullName, phone, password } = req.body;
   if (!fullName || !phone || !password) {
     return res.status(400).json({ message: 'All fields are required' });
@@ -118,11 +134,12 @@ app.post('/register', async (req, res) => {
       }
     });
   } catch (err) {
+    console.error('Registration error:', err);
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
 
-app.post('/login', async (req, res) => {
+apiRouter.post('/login', async (req, res) => {
   const { phone, password } = req.body;
   if (!phone || !password) {
     return res.status(400).json({ message: 'Phone and password are required' });
@@ -147,266 +164,30 @@ app.post('/login', async (req, res) => {
       }
     });
   } catch (err) {
+    console.error('Login error:', err);
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
 
-app.get('/users', async (req, res) => {
-  try {
-    const { userId } = req.query;
-    const users = await User.find(userId ? { _id: { $ne: userId } } : {});
-    res.json(users);
-  } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
-  }
-});
-
-app.get('/users/:id', async (req, res) => {
-  try {
-    const user = await User.findById(req.params.id);
-    if (!user) return res.status(404).json({ message: 'User not found' });
-    res.json({
-      _id: user._id,
-      fullName: user.fullName,
-      phone: user.phone,
-      profilePhoto: user.profilePhoto || '',
-      about: user.about || "Moon 🌙 Is beautiful isn't it ?"
-    });
-  } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
-  }
-});
-
-app.patch('/users/:id', async (req, res) => {
-  try {
-    const user = await User.findById(req.params.id);
-    if (!user) return res.status(404).json({ message: 'User not found' });
-    if (req.body.fullName !== undefined) user.fullName = req.body.fullName;
-    if (req.body.about !== undefined) user.about = req.body.about;
-    // Add more fields here if needed (e.g., phone)
-    await user.save();
-    res.json({ _id: user._id, fullName: user.fullName, phone: user.phone, profilePhoto: user.profilePhoto || '', about: user.about });
-  } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
-  }
-});
-
-app.delete('/users/:id', async (req, res) => {
-  try {
-    const userId = req.params.id;
-    console.log('Attempting to delete user:', userId);
-    const user = await User.findByIdAndDelete(userId);
-    if (!user) {
-      console.log('User not found:', userId);
-      return res.status(404).json({ message: 'User not found' });
-    }
-    // Delete profile photo from disk if exists
-    if (user.profilePhoto) {
-      let photoFilename = user.profilePhoto;
-      console.log('User profilePhoto value:', photoFilename);
-      // If the profilePhoto is a URL, extract the filename
-      if (photoFilename.startsWith('http')) {
-        try {
-          const urlParts = photoFilename.split('/');
-          photoFilename = urlParts[urlParts.length - 1];
-        } catch (e) {}
-      }
-      const photoPath = path.join(__dirname, 'uploads', photoFilename);
-      console.log('Computed photoPath:', photoPath);
-      console.log('File exists before deletion:', fs.existsSync(photoPath));
-      if (fs.existsSync(photoPath)) {
-        try {
-          fs.unlinkSync(photoPath);
-          console.log('Deleted profile photo:', photoPath);
-        } catch (err) {
-          console.error('Failed to delete profile photo:', photoPath, err);
-        }
-      } else {
-        console.log('Profile photo file not found:', photoPath);
-      }
-    }
-    await Message.deleteMany({ $or: [ { senderId: userId }, { receiverId: userId } ] });
-    res.json({ message: 'User, their messages, and profile photo deleted successfully' });
-  } catch (err) {
-    console.error('Error deleting user:', err);
-    res.status(500).json({ message: 'Server error', error: err.message });
-  }
-});
-
-app.delete('/users', async (req, res) => {
-  try {
-    // Delete all users
-    await User.deleteMany({});
-    // Delete all messages
-    await Message.deleteMany({});
-    res.json({ message: 'All users and their messages deleted successfully' });
-  } catch (err) {
-    console.error('Error deleting all users:', err);
-    res.status(500).json({ message: 'Server error', error: err.message });
-  }
-});
-
-app.get('/messages', async (req, res) => {
-  const { userId, otherUserId } = req.query;
-  if (!userId || !otherUserId) {
-    return res.status(400).json({ message: 'userId and otherUserId are required' });
-  }
-  try {
-    const messages = await Message.find({
-      $or: [
-        { senderId: userId, receiverId: otherUserId },
-        { senderId: otherUserId, receiverId: userId }
-      ]
-    }).sort({ timestamp: 1 });
-    res.json(messages);
-  } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
-  }
-});
-
-app.post('/messages', async (req, res) => {
-  const { senderId, receiverId, text } = req.body;
-  if (!senderId || !receiverId || !text) {
-    return res.status(400).json({ message: 'senderId, receiverId, and text are required' });
-  }
-  try {
-    const message = new Message({ senderId, receiverId, text });
-    await message.save();
-    res.status(201).json(message);
-  } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
-  }
-});
-
-app.get('/test-delete-route', (req, res) => {
-  res.send('DELETE route file is running!');
-});
-
-app.get('/users/phone/:phone', async (req, res) => {
-  try {
-    const user = await User.findOne({ phone: req.params.phone });
-    if (!user) return res.status(404).json({ message: 'User not found' });
-    res.json({
-      _id: user._id,
-      fullName: user.fullName,
-      phone: user.phone,
-      profilePhoto: user.profilePhoto || '',
-      about: user.about || 'Available'
-    });
-  } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
-  }
-});
-
-app.post('/users/:id/contacts', async (req, res) => {
-  try {
-    const userId = req.params.id;
-    const { contactId } = req.body;
-    if (!contactId) return res.status(400).json({ message: 'contactId is required' });
-    const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ message: 'User not found' });
-    if (user.contacts.includes(contactId)) {
-      return res.status(400).json({ message: 'User already in contacts' });
-    }
-    user.contacts.push(contactId);
-    await user.save();
-    res.json({ message: 'Contact added successfully', contacts: user.contacts });
-  } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
-  }
-});
-
-app.get('/users/:id/contacts', async (req, res) => {
-  try {
-    const user = await User.findById(req.params.id).populate('contacts', '_id fullName phone profilePhoto about');
-    if (!user) return res.status(404).json({ message: 'User not found' });
-    res.json(user.contacts);
-  } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
-  }
-});
-
-// Multer setup
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, 'uploads/');
-  },
-  filename: function (req, file, cb) {
-    const ext = path.extname(file.originalname);
-    cb(null, `${req.params.id}_${Date.now()}${ext}`);
-  }
-});
-const upload = multer({ storage });
-
-// Serve uploads statically
-app.use('/uploads', express.static('uploads'));
-
-// Upload and update profile photo
-app.post('/users/:id/profile-photo', upload.single('photo'), async (req, res) => {
-  try {
-    const user = await User.findById(req.params.id);
-    if (!user) return res.status(404).json({ message: 'User not found' });
-    // Delete old photo if exists
-    if (user.profilePhoto) {
-      const oldPath = path.join(__dirname, 'uploads', user.profilePhoto);
-      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
-    }
-    // Save new photo filename
-    user.profilePhoto = req.file.filename;
-    await user.save();
-    res.json({ message: 'Profile photo updated', profilePhoto: req.file.filename });
-  } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
-  }
-});
-
-app.delete('/users/:id/profile-photo', async (req, res) => {
-  try {
-    const user = await User.findById(req.params.id);
-    if (!user) return res.status(404).json({ message: 'User not found' });
-    if (user.profilePhoto) {
-      const photoPath = path.join(__dirname, 'uploads', user.profilePhoto);
-      if (fs.existsSync(photoPath)) fs.unlinkSync(photoPath);
-      user.profilePhoto = '';
-      await user.save();
-    }
-    res.json({ message: 'Profile photo deleted' });
-  } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
-  }
-});
-
-// Get all chat users (contacts + messaged users, excluding admin)
-app.get('/users/:id/chats', async (req, res) => {
-  try {
-    const userId = req.params.id;
-    // Find the user and their contacts
-    const user = await User.findById(userId).populate('contacts', '_id fullName phone profilePhoto about');
-    if (!user) return res.status(404).json({ message: 'User not found' });
-
-    // Find all users who have exchanged messages with this user
-    const sentMessages = await Message.find({ senderId: userId }).distinct('receiverId');
-    const receivedMessages = await Message.find({ receiverId: userId }).distinct('senderId');
-    const messagedUserIds = Array.from(new Set([...sentMessages, ...receivedMessages]));
-
-    // Combine contacts and messaged users
-    const contactIds = user.contacts.map(c => c._id.toString());
-    const allUserIds = Array.from(new Set([...contactIds, ...messagedUserIds]));
-    // Remove self
-    const filteredUserIds = allUserIds.filter(id => id !== userId);
-
-    // Fetch user details, exclude admin (phone === 'admin' or set a specific phone)
-    // For now, let's assume admin phone is 'admin' (change as needed)
-    const users = await User.find({ _id: { $in: filteredUserIds }, phone: { $ne: 'admin' } }, '_id fullName phone profilePhoto about');
-    res.json(users);
-  } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
-  }
-});
+// Mount API routes
+app.use('/api', apiRouter);
 
 // Health check endpoint
-app.get('/', (req, res) => {
-  res.send('API is running');
+app.get('/health', (req, res) => {
+  res.json({ status: 'healthy', timestamp: new Date().toISOString() });
+});
+
+// Catch-all route to serve React app
+if (process.env.NODE_ENV === 'production') {
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../client/build/index.html'));
+  });
+}
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ message: 'Something broke!', error: err.message });
 });
 
 server.listen(PORT, '0.0.0.0', () => {
