@@ -16,39 +16,37 @@ require('dotenv').config();
 const app = express();
 const server = http.createServer(app);
 
-// CORS configuration
-app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-// Serve static files from the React app
-if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, '../client/build')));
-}
-
-// Socket.IO configuration
-const io = new Server(server, {
-  cors: {
-    origin: '*',
-    methods: ['GET', 'POST'],
-    credentials: true
-  },
-  allowEIO3: true,
-  transports: ['polling', 'websocket'],
-  pingTimeout: 60000,
-  pingInterval: 25000
-});
-
-// Ensure uploads directory exists
-const uploadsDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir);
-}
-
 // Environment variables
 const PORT = process.env.PORT || 3020;
 const MONGO_URI = process.env.MONGO_URI;
 const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key';
+const NODE_ENV = process.env.NODE_ENV || 'development';
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
+
+// CORS configuration
+app.use(cors({
+  origin: NODE_ENV === 'production' ? [FRONTEND_URL] : '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+}));
+
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Socket.IO configuration
+const io = new Server(server, {
+  cors: {
+    origin: NODE_ENV === 'production' ? [FRONTEND_URL] : '*',
+    methods: ['GET', 'POST'],
+    credentials: true
+  },
+  path: '/socket.io/',
+  transports: ['polling', 'websocket'],
+  allowEIO3: true,
+  pingTimeout: 60000,
+  pingInterval: 25000
+});
 
 // MongoDB connection with retry logic
 const connectDB = async () => {
@@ -112,6 +110,7 @@ io.on('connection', (socket) => {
 const apiRouter = express.Router();
 
 apiRouter.post('/register', async (req, res) => {
+  console.log('Register request received:', req.body);
   const { fullName, phone, password } = req.body;
   if (!fullName || !phone || !password) {
     return res.status(400).json({ message: 'All fields are required' });
@@ -124,6 +123,7 @@ apiRouter.post('/register', async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     const user = new User({ fullName, phone, password: hashedPassword });
     await user.save();
+    console.log('User registered successfully:', user._id);
     res.status(201).json({
       message: 'User registered successfully',
       user: {
@@ -140,6 +140,7 @@ apiRouter.post('/register', async (req, res) => {
 });
 
 apiRouter.post('/login', async (req, res) => {
+  console.log('Login request received:', req.body);
   const { phone, password } = req.body;
   if (!phone || !password) {
     return res.status(400).json({ message: 'Phone and password are required' });
@@ -154,6 +155,7 @@ apiRouter.post('/login', async (req, res) => {
       return res.status(400).json({ message: 'Password does not match' });
     }
     const token = jwt.sign({ userId: user._id, phone: user.phone }, JWT_SECRET, { expiresIn: '1h' });
+    console.log('User logged in successfully:', user._id);
     res.json({
       token,
       user: {
@@ -174,22 +176,40 @@ app.use('/api', apiRouter);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.json({ status: 'healthy', timestamp: new Date().toISOString() });
+  res.json({
+    status: 'healthy',
+    environment: NODE_ENV,
+    timestamp: new Date().toISOString()
+  });
 });
 
-// Catch-all route to serve React app
-if (process.env.NODE_ENV === 'production') {
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../client/build/index.html'));
-  });
+// Serve static files in production
+if (NODE_ENV === 'production') {
+  // Serve static files from the React app
+  const clientBuildPath = path.join(__dirname, '../client/build');
+  if (fs.existsSync(clientBuildPath)) {
+    console.log('Serving static files from:', clientBuildPath);
+    app.use(express.static(clientBuildPath));
+
+    // Handle React routing, return all requests to React app
+    app.get('*', (req, res) => {
+      res.sendFile(path.join(clientBuildPath, 'index.html'));
+    });
+  } else {
+    console.warn('Client build directory not found:', clientBuildPath);
+  }
 }
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ message: 'Something broke!', error: err.message });
+  console.error('Global error handler:', err.stack);
+  res.status(500).json({
+    message: 'Something broke!',
+    error: NODE_ENV === 'development' ? err.message : 'Internal server error'
+  });
 });
 
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`Server running in ${NODE_ENV} mode on port ${PORT}`);
+  console.log('CORS origin:', NODE_ENV === 'production' ? [FRONTEND_URL] : '*');
 }); 

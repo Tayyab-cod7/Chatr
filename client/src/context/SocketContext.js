@@ -20,6 +20,7 @@ export const SocketProvider = ({ children }) => {
       console.log('Connecting to Socket.IO server at:', apiBase);
 
       const newSocket = io(apiBase, {
+        path: '/socket.io/',
         transports: ['polling', 'websocket'],
         secure: true,
         rejectUnauthorized: false,
@@ -29,28 +30,41 @@ export const SocketProvider = ({ children }) => {
         timeout: 20000,
         autoConnect: true,
         forceNew: true,
-        path: '/socket.io'
+        withCredentials: true,
+        extraHeaders: {
+          'Access-Control-Allow-Credentials': 'true'
+        }
+      });
+
+      // Debug listeners
+      newSocket.io.on("packet", ({ type, data }) => {
+        console.log('Socket packet:', type, data);
+      });
+
+      newSocket.io.on("reconnect_attempt", (attempt) => {
+        console.log('Socket reconnection attempt:', attempt);
       });
 
       newSocket.on('connect', () => {
-        console.log('Socket connected successfully');
+        console.log('Socket connected successfully:', newSocket.id);
         setConnected(true);
         setRetryCount(0);
         
         // Identify user if available
         const user = JSON.parse(localStorage.getItem('user'));
         if (user && user._id) {
+          console.log('Identifying user:', user._id);
           newSocket.emit('identify', user._id);
         }
       });
 
-      newSocket.on('disconnect', () => {
-        console.log('Socket disconnected');
+      newSocket.on('disconnect', (reason) => {
+        console.log('Socket disconnected:', reason);
         setConnected(false);
       });
 
       newSocket.on('connect_error', (error) => {
-        console.log('Socket connection error:', error);
+        console.log('Socket connection error:', error.message);
         setConnected(false);
         
         if (retryCount < MAX_RETRIES) {
@@ -70,6 +84,15 @@ export const SocketProvider = ({ children }) => {
 
       newSocket.on('error', (error) => {
         console.error('Socket error:', error);
+      });
+
+      // Handle ping/pong
+      newSocket.on('ping', () => {
+        console.log('Socket ping');
+      });
+
+      newSocket.on('pong', (latency) => {
+        console.log('Socket pong, latency:', latency, 'ms');
       });
 
       setSocket(newSocket);
