@@ -28,16 +28,19 @@ const Login = () => {
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(formData),
+        credentials: 'include'
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
-        throw new Error(data.message || 'Login failed');
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.message || `Login failed with status ${response.status}`);
       }
+
+      const data = await response.json();
 
       // Store user data in localStorage
       localStorage.setItem('user', JSON.stringify(data.user));

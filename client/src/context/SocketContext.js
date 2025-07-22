@@ -16,7 +16,7 @@ export const SocketProvider = ({ children }) => {
 
   useEffect(() => {
     const connectSocket = () => {
-      const apiBase = getApiBase().replace('/api', ''); // Remove /api for Socket.IO
+      const apiBase = getApiBase();
       console.log('Connecting to Socket.IO server at:', apiBase);
 
       const newSocket = io(apiBase, {
