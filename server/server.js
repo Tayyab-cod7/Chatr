@@ -139,7 +139,8 @@ app.get('/health', (req, res) => {
 });
 
 // API Routes
-app.post('/api/register', async (req, res) => {
+app.post('/register', async (req, res) => {
+  console.log('Register endpoint hit');
   console.log('Register request received:', req.body);
   const { fullName, phone, password } = req.body;
   if (!fullName || !phone || !password) {
@@ -169,7 +170,8 @@ app.post('/api/register', async (req, res) => {
   }
 });
 
-app.post('/api/login', async (req, res) => {
+app.post('/login', async (req, res) => {
+  console.log('Login endpoint hit');
   console.log('Login request received:', req.body);
   const { phone, password } = req.body;
   if (!phone || !password) {
@@ -214,4 +216,4 @@ app.use((err, req, res, next) => {
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running in ${NODE_ENV} mode on port ${PORT}`);
   console.log('CORS origin: *');
-}); 
+});

@@ -23,7 +23,7 @@ const Register = () => {
     setError('');
 
     try {
-      const apiUrl = `${getApiBase()}/api/register`;
+      const apiUrl = `${getApiBase()}/register`;
       console.log('Registering user at:', apiUrl);
       
       const response = await fetch(apiUrl, {
@@ -151,4 +151,4 @@ const Register = () => {
   );
 };
 
-export default Register; 
+export default Register;

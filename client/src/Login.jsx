@@ -22,7 +22,7 @@ const Login = () => {
     setError('');
 
     try {
-      const apiUrl = `${getApiBase()}/api/login`;
+      const apiUrl = `${getApiBase()}/login`;
       console.log('Logging in user at:', apiUrl);
       
       const response = await fetch(apiUrl, {
@@ -133,4 +133,4 @@ const Login = () => {
   );
 };
 
-export default Login; 
+export default Login;
