@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
-import { toast, ToastContainer } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
-import { Link, useNavigate } from 'react-router-dom';
+import { toast } from 'react-toastify';
 import getApiBase from '../apiBase';
 
 const inputVariants = {
@@ -84,7 +82,6 @@ const Register = () => {
       transition={{ duration: 0.7 }}
       className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#0F172A] via-[#181E2A] to-[#232946]"
     >
-      <ToastContainer position="top-center" autoClose={2000} />
       <motion.div
         initial={{ opacity: 0, y: 40 }}
         animate={{ opacity: 1, y: 0 }}
