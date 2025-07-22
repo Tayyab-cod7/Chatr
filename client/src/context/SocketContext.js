@@ -15,13 +15,15 @@ export const SocketProvider = ({ children }) => {
   useEffect(() => {
     const socketUrl = getApiBase();
     const newSocket = io(socketUrl, {
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'],
       secure: true,
       rejectUnauthorized: false,
-      path: '/socket.io',
       reconnection: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
+      timeout: 20000,
+      autoConnect: true,
+      forceNew: true
     });
 
     newSocket.on('connect', () => {
@@ -42,12 +44,20 @@ export const SocketProvider = ({ children }) => {
 
     newSocket.on('connect_error', (error) => {
       console.log('Socket connection error:', error);
+      // Try to reconnect with polling if websocket fails
+      if (newSocket.io.opts.transports.includes('websocket')) {
+        console.log('Falling back to polling transport');
+        newSocket.io.opts.transports = ['polling'];
+      }
     });
 
     setSocket(newSocket);
 
     return () => {
-      newSocket.close();
+      if (newSocket) {
+        newSocket.removeAllListeners();
+        newSocket.close();
+      }
     };
   }, []);
 

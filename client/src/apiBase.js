@@ -4,7 +4,7 @@ const getApiBase = () => {
   
   // For Railway deployment
   if (hostname.includes('railway.app')) {
-    return `${protocol}//${hostname}`;
+    return process.env.REACT_APP_API_URL || `${protocol}//${hostname}`;
   }
   
   // For localhost and local network
@@ -13,7 +13,7 @@ const getApiBase = () => {
   }
   
   // Default case - use HTTPS for production
-  return `${protocol}//${hostname}`;
+  return process.env.REACT_APP_API_URL || `${protocol}//${hostname}`;
 };
 
 export default getApiBase; 

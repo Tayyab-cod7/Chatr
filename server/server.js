@@ -9,7 +9,7 @@ const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
-const socketIo = require('socket.io');
+const { Server } = require('socket.io');
 
 require('dotenv').config();
 
@@ -18,46 +18,24 @@ const server = http.createServer(app);
 
 // CORS configuration
 const corsOptions = {
-  origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps, curl, etc.)
-    if (!origin) return callback(null, true);
-    
-    // List of allowed origins
-    const allowedOrigins = [
-      'http://localhost:3000',
-      'http://localhost:5000',
-      'http://127.0.0.1:3000',
-      'http://127.0.0.1:5000',
-      process.env.FRONTEND_URL,
-    ].filter(Boolean);
-    
-    // Allow local network IPs (192.168.*)
-    if (/^http:\/\/192\.168\./.test(origin)) {
-      return callback(null, true);
-    }
-    
-    if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV !== 'production') {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
 };
 
 app.use(cors(corsOptions));
 app.use(express.json());
 
 // Socket.IO configuration
-const io = socketIo(server, {
+const io = new Server(server, {
   cors: {
     origin: '*',
     methods: ['GET', 'POST'],
-    credentials: true
+    credentials: true,
   },
+  allowEIO3: true,
   transports: ['websocket', 'polling'],
-  path: '/socket.io'
 });
 
 // Ensure uploads directory exists
@@ -77,7 +55,7 @@ mongoose.connect(MONGO_URI)
 
 // Socket.IO connection handling
 io.on('connection', (socket) => {
-  console.log('New client connected');
+  console.log('New client connected:', socket.id);
 
   socket.on('identify', (userId) => {
     socket.userId = userId;
@@ -91,32 +69,32 @@ io.on('connection', (socket) => {
 
   socket.on('send-message', async (message) => {
     try {
-      // Save message to database
       const newMessage = new Message({
         senderId: message.senderId,
         receiverId: message.receiverId,
         text: message.text,
-        timestamp: message.timestamp
+        timestamp: message.timestamp || Date.now()
       });
-      await newMessage.save();
-
-      // Emit to room
-      const roomId = [message.senderId, message.receiverId].sort().join(':');
-      io.to(roomId).emit('receive-message', newMessage);
+      const savedMessage = await newMessage.save();
+      
+      // Emit to both sender and receiver
+      io.emit('receive-message', savedMessage);
     } catch (error) {
       console.error('Error saving/sending message:', error);
+      socket.emit('message-error', { error: 'Failed to send message' });
     }
   });
 
   socket.on('disconnect', () => {
-    console.log('Client disconnected');
+    console.log('Client disconnected:', socket.id);
+  });
+
+  socket.on('error', (error) => {
+    console.error('Socket error:', error);
   });
 });
 
-app.get('/', (req, res) => {
-  res.send('API is running');
-});
-
+// API Routes
 app.post('/register', async (req, res) => {
   const { fullName, phone, password } = req.body;
   if (!fullName || !phone || !password) {
@@ -130,7 +108,6 @@ app.post('/register', async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     const user = new User({ fullName, phone, password: hashedPassword });
     await user.save();
-    // Return user object
     res.status(201).json({
       message: 'User registered successfully',
       user: {
@@ -427,6 +404,11 @@ app.get('/users/:id/chats', async (req, res) => {
   }
 });
 
-server.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+// Health check endpoint
+app.get('/', (req, res) => {
+  res.send('API is running');
+});
+
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server running on port ${PORT}`);
 }); 
