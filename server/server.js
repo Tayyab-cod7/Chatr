@@ -8,11 +8,13 @@ const Message = require('./Message');
 const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
+const http = require('http');
+const socketIo = require('socket.io');
 
 require('dotenv').config();
 
 const app = express();
-app.use(express.json());
+const server = http.createServer(app);
 
 // CORS configuration
 const corsOptions = {
@@ -26,8 +28,8 @@ const corsOptions = {
       'http://localhost:5000',
       'http://127.0.0.1:3000',
       'http://127.0.0.1:5000',
-      process.env.FRONTEND_URL, // Your Railway frontend URL
-    ].filter(Boolean); // Remove undefined values
+      process.env.FRONTEND_URL,
+    ].filter(Boolean);
     
     // Allow local network IPs (192.168.*)
     if (/^http:\/\/192\.168\./.test(origin)) {
@@ -45,11 +47,18 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
+app.use(express.json());
 
-// Environment variables
-const PORT = process.env.PORT || 5000;
-const MONGO_URI = process.env.MONGO_URI;
-const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key';
+// Socket.IO configuration
+const io = socketIo(server, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST'],
+    credentials: true
+  },
+  transports: ['websocket', 'polling'],
+  path: '/socket.io'
+});
 
 // Ensure uploads directory exists
 const uploadsDir = path.join(__dirname, 'uploads');
@@ -57,9 +66,52 @@ if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir);
 }
 
+// Environment variables
+const PORT = process.env.PORT || 3020;
+const MONGO_URI = process.env.MONGO_URI;
+const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key';
+
 mongoose.connect(MONGO_URI)
   .then(() => console.log('MongoDB connected'))
   .catch(err => console.error('MongoDB connection error:', err));
+
+// Socket.IO connection handling
+io.on('connection', (socket) => {
+  console.log('New client connected');
+
+  socket.on('identify', (userId) => {
+    socket.userId = userId;
+    console.log('User identified:', userId);
+  });
+
+  socket.on('join-room', (roomId) => {
+    socket.join(roomId);
+    console.log('User joined room:', roomId);
+  });
+
+  socket.on('send-message', async (message) => {
+    try {
+      // Save message to database
+      const newMessage = new Message({
+        senderId: message.senderId,
+        receiverId: message.receiverId,
+        text: message.text,
+        timestamp: message.timestamp
+      });
+      await newMessage.save();
+
+      // Emit to room
+      const roomId = [message.senderId, message.receiverId].sort().join(':');
+      io.to(roomId).emit('receive-message', newMessage);
+    } catch (error) {
+      console.error('Error saving/sending message:', error);
+    }
+  });
+
+  socket.on('disconnect', () => {
+    console.log('Client disconnected');
+  });
+});
 
 app.get('/', (req, res) => {
   res.send('API is running');
@@ -375,60 +427,6 @@ app.get('/users/:id/chats', async (req, res) => {
   }
 });
 
-// --- Socket.IO integration ---
-const http = require('http');
-const { Server } = require('socket.io');
-const server = http.createServer(app);
-const io = new Server(server, {
-  cors: {
-    origin: '*', // Allow all origins for dev/mobile testing
-    methods: ['GET', 'POST']
-  }
-});
-
-const userSocketMap = {};
-
-io.on('connection', (socket) => {
-  console.log('User connected:', socket.id);
-
-  // Listen for user identification
-  socket.on('identify', (userId) => {
-    userSocketMap[userId] = socket.id;
-  });
-
-  socket.on('send-message', async (data) => {
-    try {
-      const message = new Message({ senderId: data.senderId, receiverId: data.receiverId, text: data.text });
-      const saved = await message.save();
-      
-      // Only emit the message once when it's newly created
-      if (userSocketMap[data.senderId]) {
-        io.to(userSocketMap[data.senderId]).emit('receive-message', saved);
-      }
-      if (userSocketMap[data.receiverId]) {
-        io.to(userSocketMap[data.receiverId]).emit('receive-message', saved);
-      }
-    } catch (err) {
-      console.error('Failed to save message:', err);
-    }
-  });
-
-  socket.on('join-room', (roomId) => {
-    socket.join(roomId);
-  });
-
-  socket.on('disconnect', () => {
-    console.log('User disconnected:', socket.id);
-    // Remove user from userSocketMap
-    for (const [userId, sockId] of Object.entries(userSocketMap)) {
-      if (sockId === socket.id) {
-        delete userSocketMap[userId];
-        break;
-      }
-    }
-  });
-});
-
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on http://localhost:${PORT} and on your local network.`);
+server.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
 }); 

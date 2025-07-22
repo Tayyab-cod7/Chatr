@@ -12,8 +12,8 @@ const getApiBase = () => {
     return `http://${hostname}:${port}`;
   }
   
-  // Default case
-  return `${protocol}//${hostname}:${port}`;
+  // Default case - use HTTPS for production
+  return `${protocol}//${hostname}`;
 };
 
 export default getApiBase; 
