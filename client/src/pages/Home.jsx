@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import getApiBase from '../apiBase';
 
@@ -8,7 +8,7 @@ const Home = () => {
   const currentUser = JSON.parse(localStorage.getItem('user'));
   const API_URL = getApiBase();
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     if (!currentUser) {
       navigate('/login');
       return;
@@ -22,11 +22,11 @@ const Home = () => {
     } catch (err) {
       console.error('Error fetching users:', err);
     }
-  };
+  }, [currentUser, navigate, API_URL]);
 
   useEffect(() => {
     fetchUsers();
-  }, [currentUser, navigate]);
+  }, [fetchUsers]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-100 via-blue-100 to-purple-100">

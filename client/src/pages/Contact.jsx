@@ -1,7 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { UserPlusIcon } from '@heroicons/react/24/solid';
-import { useState, useEffect } from 'react';
 import getApiBase from '../apiBase';
 import { useSocket } from '../context/SocketContext';
 
@@ -17,7 +16,7 @@ const Contact = () => {
   const [contacts, setContacts] = useState([]);
   const socket = useSocket();
 
-  const fetchContacts = async () => {
+  const fetchContacts = useCallback(async () => {
     if (!currentUser) return;
     try {
       const res = await fetch(`${API_URL}/users/${currentUser._id}/contacts`);
@@ -28,17 +27,17 @@ const Contact = () => {
     } catch (err) {
       console.error('Error fetching contacts:', err);
     }
-  };
+  }, [currentUser, API_URL]);
 
   useEffect(() => {
     fetchContacts();
-  }, [currentUser]);
+  }, [fetchContacts]);
 
   useEffect(() => {
     if (addContactStatus === 'Contact added successfully!') {
       fetchContacts();
     }
-  }, [addContactStatus]);
+  }, [addContactStatus, fetchContacts]);
 
   useEffect(() => {
     if (!socket) return;

@@ -21,15 +21,6 @@ function getInitials(name) {
 function isSameDay(d1, d2) {
   return d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
 }
-function getDateLabel(date) {
-  const now = new Date();
-  const d = new Date(date);
-  if (isSameDay(now, d)) return 'Today';
-  const yesterday = new Date(now);
-  yesterday.setDate(now.getDate() - 1);
-  if (isSameDay(yesterday, d)) return 'Yesterday';
-  return d.toLocaleDateString();
-}
 
 const API_URL = getApiBase();
 
