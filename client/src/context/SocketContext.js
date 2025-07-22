@@ -10,7 +10,6 @@ export const useSocket = () => {
 
 export const SocketProvider = ({ children }) => {
   const [socket, setSocket] = useState(null);
-  const [connected, setConnected] = useState(false);
 
   useEffect(() => {
     const socketUrl = getApiBase();
@@ -21,12 +20,10 @@ export const SocketProvider = ({ children }) => {
 
     newSocket.on('connect', () => {
       console.log('Socket connected');
-      setConnected(true);
     });
 
     newSocket.on('disconnect', () => {
       console.log('Socket disconnected');
-      setConnected(false);
     });
 
     setSocket(newSocket);

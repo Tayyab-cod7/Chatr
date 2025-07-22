@@ -1,144 +1,111 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
-import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import { ArrowLeftIcon, UserCircleIcon, ArrowRightIcon } from '@heroicons/react/24/solid';
 import getApiBase from '../apiBase';
-
-const DEFAULT_AVATAR = 'https://upload.wikimedia.org/wikipedia/commons/9/99/Sample_User_Icon.png';
-
-const pageVariants = {
-  initial: { x: '100%', opacity: 0 },
-  animate: { x: 0, opacity: 1, transition: { type: 'spring', stiffness: 80, damping: 20 } },
-  exit: { x: '-100%', opacity: 0, transition: { type: 'spring', stiffness: 80, damping: 20 } },
-};
 
 const Settings = () => {
   const navigate = useNavigate();
-  const [exiting, setExiting] = React.useState(false);
-  const [user, setUser] = useState(() => JSON.parse(localStorage.getItem('user')));
-  const [avatar, setAvatar] = useState(DEFAULT_AVATAR);
+  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
   const API_URL = getApiBase();
+  const currentUser = JSON.parse(localStorage.getItem('user'));
 
-  // Fetch latest user from backend
-  const fetchUser = async () => {
-    const storedUser = JSON.parse(localStorage.getItem('user'));
-    if (storedUser && storedUser._id) {
-      try {
-        const res = await fetch(`${API_URL}/users/${storedUser._id}`);
-        if (res.ok) {
-          const freshUser = await res.json();
-          setUser(freshUser);
-          localStorage.setItem('user', JSON.stringify(freshUser));
-          if (freshUser.profilePhoto) {
-            setAvatar(`${API_URL}/uploads/${freshUser.profilePhoto}`);
-          } else {
-            setAvatar(DEFAULT_AVATAR);
-          }
-        }
-      } catch {}
+  const handleLogout = () => {
+    localStorage.removeItem('user');
+    navigate('/login');
+  };
+
+  const handleDeleteAccount = async () => {
+    try {
+      const res = await fetch(`${API_URL}/users/${currentUser._id}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        localStorage.removeItem('user');
+        navigate('/login');
+      } else {
+        alert('Failed to delete account');
+      }
+    } catch (err) {
+      alert('Error deleting account');
     }
   };
 
-  useEffect(() => {
-    fetchUser();
-    // eslint-disable-next-line
-  }, []);
-
-  // Listen for changes in localStorage (e.g., after editing profile/about)
-  useEffect(() => {
-    const handleStorage = () => {
-      fetchUser();
-    };
-    window.addEventListener('storage', handleStorage);
-    return () => window.removeEventListener('storage', handleStorage);
-    // eslint-disable-next-line
-  }, [API_URL]);
-
-  const handleBack = () => {
-    setExiting(true);
-    setTimeout(() => navigate('/chat'), 350);
-  };
-
-  const handleProfilePicClick = () => {
-    navigate('/profile');
-  };
-
   return (
-    <AnimatePresence>
-      {!exiting && (
-        <LayoutGroup>
-          <motion.div
-            className="fixed inset-0 z-50 min-h-screen flex flex-col items-center justify-start bg-gradient-to-br from-green-100 via-blue-100 to-purple-100 w-full"
-            initial="initial"
-            animate="animate"
-            exit="exit"
-            variants={pageVariants}
+    <div className="min-h-screen bg-gradient-to-br from-green-100 via-blue-100 to-purple-100">
+      <div className="flex items-center justify-between px-4 py-3 bg-white/80 backdrop-blur-md shadow-md">
+        <button onClick={() => navigate('/chat')} className="text-gray-600 hover:text-gray-900">
+          <ArrowLeftIcon className="w-6 h-6" />
+        </button>
+        <h1 className="text-xl font-bold text-gray-900">Settings</h1>
+        <div className="w-6"></div>
+      </div>
+
+      <div className="max-w-lg mx-auto p-4">
+        <div className="mt-8 bg-white/70 backdrop-blur-lg rounded-2xl shadow-xl overflow-hidden">
+          <button
+            onClick={() => navigate('/profile')}
+            className="flex items-center w-full p-4 hover:bg-blue-50/50 transition"
           >
-            {/* Header */}
-            <div className="flex items-center px-2 sm:px-6 py-4 border-b bg-white/80 backdrop-blur-md sticky top-0 z-20 shadow-md rounded-b-2xl w-full max-w-2xl mx-auto">
-              <button onClick={handleBack} className="mr-2 text-gray-700 hover:bg-gray-200 rounded-full p-1">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
-                </svg>
-              </button>
-              <div className="text-xl font-bold">Settings</div>
-              {/* Removed search icon */}
-            </div>
-            {/* Profile */}
-            <motion.div
-              layoutId="profile-section"
-              className="flex items-center gap-4 px-4 sm:px-6 py-4 border-b cursor-pointer bg-white/70 backdrop-blur-lg rounded-2xl shadow animate-fade-in w-full max-w-2xl mx-auto mt-8"
-              onClick={handleProfilePicClick}
-            >
-              <motion.img
-                layoutId="profile-avatar"
-                src={avatar}
-                alt="avatar"
-                className="w-16 h-16 rounded-full object-cover border-4 border-blue-200 shadow"
-              />
-              <div className="flex-1">
-                <div className="text-lg font-bold text-blue-900">{user?.fullName || ''}</div>
-                <div className="text-sm text-gray-500 flex items-center gap-1 truncate max-w-[180px]">{user?.about || "Available"}</div>
-              </div>
-            </motion.div>
-            {/* Logout & Delete Account Buttons */}
-            <div className="flex flex-col gap-3 px-4 sm:px-6 pt-8 w-full max-w-2xl mx-auto">
-              <button
-                className="w-full bg-gradient-to-r from-red-500 to-pink-500 text-white font-semibold py-3 rounded-full text-lg shadow-lg hover:from-red-600 hover:to-pink-600 transition"
-                onClick={() => {
-                  localStorage.clear();
-                  navigate('/login');
-                }}
-              >
-                Logout
-              </button>
-              <button
-                className="w-full bg-gray-200 text-red-600 font-semibold py-3 rounded-full text-lg hover:bg-red-100 border border-red-300 transition"
-                onClick={async () => {
-                  if (!user) return;
-                  if (!window.confirm('Are you sure you want to delete your account? This cannot be undone.')) return;
-                  try {
-                    const API_URL = getApiBase();
-                    await fetch(`${API_URL}/users/${user._id}`, { method: 'DELETE' });
-                    localStorage.clear();
-                    navigate('/register');
-                  } catch (err) {
-                    alert('Failed to delete account');
-                  }
-                }}
-              >
-                Delete Account
-              </button>
-              <div className="text-center text-gray-500 text-sm mt-4">
-                Version 1.0.0
+            <UserCircleIcon className="w-6 h-6 text-blue-600" />
+            <span className="ml-3 font-semibold text-gray-900">Profile</span>
+            <ArrowRightIcon className="w-5 h-5 text-gray-400 ml-auto" />
+          </button>
+
+          <div className="border-t border-gray-200" />
+
+          <button
+            onClick={handleLogout}
+            className="flex items-center w-full p-4 hover:bg-red-50/50 transition text-red-600"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+            <span className="ml-3 font-semibold">Logout</span>
+          </button>
+
+          <div className="border-t border-gray-200" />
+
+          <button
+            onClick={() => setShowConfirmDelete(true)}
+            className="flex items-center w-full p-4 hover:bg-red-50/50 transition text-red-600"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            <span className="ml-3 font-semibold">Delete Account</span>
+          </button>
+        </div>
+
+        <div className="mt-8 text-center text-gray-500">
+          Version 1.0.0
+        </div>
+
+        {showConfirmDelete && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-2xl p-6 w-full max-w-sm">
+              <h3 className="text-lg font-bold text-gray-900 mb-4">Delete Account?</h3>
+              <p className="text-gray-600 mb-6">
+                This will permanently delete your account and all your data. This action cannot be undone.
+              </p>
+              <div className="flex gap-4">
+                <button
+                  onClick={() => setShowConfirmDelete(false)}
+                  className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteAccount}
+                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
+                >
+                  Delete
+                </button>
               </div>
             </div>
-            {/* Settings List */}
-            {/* Removed settings/options list as requested */}
-          </motion.div>
-        </LayoutGroup>
-      )}
-    </AnimatePresence>
+          </div>
+        )}
+      </div>
+    </div>
   );
 };
 

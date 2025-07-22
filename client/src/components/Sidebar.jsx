@@ -1,6 +1,6 @@
-import React, { useState } from "react";
-import { PlusIcon, ChatBubbleLeftRightIcon } from '@heroicons/react/24/solid';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ChatBubbleLeftRightIcon } from '@heroicons/react/24/solid';
 import getApiBase from '../apiBase';
 
 function stringToColor(str) {
@@ -19,24 +19,19 @@ function getInitials(name) {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
+const API_URL = getApiBase();
+
 const Sidebar = ({ users, onSelectUser }) => {
-  const [hover, setHover] = useState(false);
-  const [imgError, setImgError] = useState({});
   const navigate = useNavigate();
-  const API_URL = getApiBase();
+  const [imgError, setImgError] = useState({});
 
   const handleImgError = (userId) => {
-    setImgError((prev) => ({ ...prev, [userId]: true }));
+    setImgError(prev => ({ ...prev, [userId]: true }));
   };
 
   const handleUserClick = (user) => {
-    if (window.innerWidth < 768) {
-      // Mobile: navigate to chat page
-      navigate(`/chat/${user._id}`);
-    } else {
-      // Desktop: set selected user in parent
-      onSelectUser && onSelectUser(user);
-    }
+    onSelectUser(user);
+    navigate(`/chat/${user._id}`);
   };
 
   return (
@@ -65,10 +60,8 @@ const Sidebar = ({ users, onSelectUser }) => {
           </button>
         ))}
       </div>
-      {/* Floating Send Message Button */}
-      {/* Desktop: left, Mobile: right */}
+      {/* Floating Send Message Button (Desktop: left, Mobile: right) */}
       <div>
-        {/* Desktop (md and up): left side */}
         <div className="hidden md:flex fixed left-8 bottom-24 z-50">
           <button
             className="flex items-center justify-center bg-gradient-to-r from-green-500 to-blue-500 text-white h-12 w-12 rounded-full shadow-lg focus:outline-none hover:from-green-600 hover:to-blue-600 transition"
@@ -78,7 +71,6 @@ const Sidebar = ({ users, onSelectUser }) => {
             <ChatBubbleLeftRightIcon className="w-6 h-6" />
           </button>
         </div>
-        {/* Mobile: right side */}
         <div className="flex md:hidden fixed right-6 bottom-20 z-50">
           <button
             className="flex items-center justify-center bg-gradient-to-r from-green-500 to-blue-500 text-white h-12 w-12 rounded-full shadow-lg focus:outline-none hover:from-green-600 hover:to-blue-600 transition"
