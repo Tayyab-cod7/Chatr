@@ -110,8 +110,16 @@ export const SocketProvider = ({ children }) => {
     return cleanup;
   }, [retryCount]);
 
+  // Provide both socket and connection status
+  const value = {
+    socket,
+    connected,
+    retryCount,
+    maxRetries: MAX_RETRIES
+  };
+
   return (
-    <SocketContext.Provider value={{ socket, connected }}>
+    <SocketContext.Provider value={value}>
       {children}
     </SocketContext.Provider>
   );

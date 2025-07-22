@@ -23,21 +23,30 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key';
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
 
+// Debug logging
+console.log('Starting server with config:', {
+  port: PORT,
+  environment: NODE_ENV,
+  frontendUrl: FRONTEND_URL,
+  mongoUri: MONGO_URI ? 'Set' : 'Not set'
+});
+
 // CORS configuration
-app.use(cors({
-  origin: NODE_ENV === 'production' ? [FRONTEND_URL] : '*',
+const corsOptions = {
+  origin: '*',  // Allow all origins in development and production
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
-}));
+};
 
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Socket.IO configuration
 const io = new Server(server, {
   cors: {
-    origin: NODE_ENV === 'production' ? [FRONTEND_URL] : '*',
+    origin: '*',  // Allow all origins
     methods: ['GET', 'POST'],
     credentials: true
   },
@@ -51,6 +60,11 @@ const io = new Server(server, {
 // MongoDB connection with retry logic
 const connectDB = async () => {
   try {
+    if (!MONGO_URI) {
+      throw new Error('MONGO_URI environment variable is not set');
+    }
+    
+    console.log('Attempting to connect to MongoDB...');
     await mongoose.connect(MONGO_URI, {
       useNewUrlParser: true,
       useUnifiedTopology: true,
@@ -179,26 +193,19 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'healthy',
     environment: NODE_ENV,
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    mongoConnection: mongoose.connection.readyState === 1
   });
 });
 
-// Serve static files in production
-if (NODE_ENV === 'production') {
-  // Serve static files from the React app
-  const clientBuildPath = path.join(__dirname, '../client/build');
-  if (fs.existsSync(clientBuildPath)) {
-    console.log('Serving static files from:', clientBuildPath);
-    app.use(express.static(clientBuildPath));
-
-    // Handle React routing, return all requests to React app
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(clientBuildPath, 'index.html'));
-    });
-  } else {
-    console.warn('Client build directory not found:', clientBuildPath);
-  }
-}
+// Root endpoint
+app.get('/', (req, res) => {
+  res.json({
+    message: 'Chatr API is running',
+    environment: NODE_ENV,
+    timestamp: new Date().toISOString()
+  });
+});
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -209,7 +216,8 @@ app.use((err, req, res, next) => {
   });
 });
 
+// Start server
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running in ${NODE_ENV} mode on port ${PORT}`);
-  console.log('CORS origin:', NODE_ENV === 'production' ? [FRONTEND_URL] : '*');
+  console.log('CORS origin:', corsOptions.origin);
 }); 
