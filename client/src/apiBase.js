@@ -13,9 +13,11 @@ const getApiBase = () => {
       baseUrl = apiUrl;
       console.log('Using configured API URL:', baseUrl);
     } else {
-      // Otherwise, use the same origin
-      baseUrl = window.location.origin;
-      console.log('Using same origin for API:', baseUrl);
+      // Otherwise, use the same origin but replace the subdomain
+      const hostParts = hostname.split('.');
+      hostParts[0] = 'divine-nurturing-production'; // Replace frontend subdomain with backend subdomain
+      baseUrl = `${protocol}//${hostParts.join('.')}`;
+      console.log('Using derived API URL:', baseUrl);
     }
   }
   // For localhost and local network
@@ -29,7 +31,7 @@ const getApiBase = () => {
     console.log('Using default API URL:', baseUrl);
   }
 
-  const finalUrl = `${baseUrl}/api`;
+  const finalUrl = `${baseUrl}`;  // Remove /api since it's now part of the routes
   console.log('Final API Base URL:', finalUrl);
   return finalUrl;
 };

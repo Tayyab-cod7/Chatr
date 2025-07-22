@@ -75,6 +75,7 @@ export const SocketProvider = ({ children }) => {
           if (newSocket.io.opts.transports.includes('websocket')) {
             console.log('Falling back to polling transport');
             newSocket.io.opts.transports = ['polling'];
+            newSocket.connect(); // Force reconnect with new transport
           }
         } else {
           console.log('Max retries reached, stopping reconnection attempts');

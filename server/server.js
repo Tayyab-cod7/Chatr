@@ -32,21 +32,20 @@ console.log('Starting server with config:', {
 });
 
 // CORS configuration
-const corsOptions = {
-  origin: '*',  // Allow all origins in development and production
+app.use(cors({
+  origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
-};
+}));
 
-app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Socket.IO configuration
 const io = new Server(server, {
   cors: {
-    origin: '*',  // Allow all origins
+    origin: '*',
     methods: ['GET', 'POST'],
     credentials: true
   },
@@ -120,10 +119,27 @@ io.on('connection', (socket) => {
   });
 });
 
-// API Routes
-const apiRouter = express.Router();
+// Root endpoint
+app.get('/', (req, res) => {
+  res.json({
+    message: 'Chatr API is running',
+    environment: NODE_ENV,
+    timestamp: new Date().toISOString()
+  });
+});
 
-apiRouter.post('/register', async (req, res) => {
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'healthy',
+    environment: NODE_ENV,
+    timestamp: new Date().toISOString(),
+    mongoConnection: mongoose.connection.readyState === 1
+  });
+});
+
+// API Routes
+app.post('/api/register', async (req, res) => {
   console.log('Register request received:', req.body);
   const { fullName, phone, password } = req.body;
   if (!fullName || !phone || !password) {
@@ -153,7 +169,7 @@ apiRouter.post('/register', async (req, res) => {
   }
 });
 
-apiRouter.post('/login', async (req, res) => {
+app.post('/api/login', async (req, res) => {
   console.log('Login request received:', req.body);
   const { phone, password } = req.body;
   if (!phone || !password) {
@@ -185,28 +201,6 @@ apiRouter.post('/login', async (req, res) => {
   }
 });
 
-// Mount API routes
-app.use('/api', apiRouter);
-
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({
-    status: 'healthy',
-    environment: NODE_ENV,
-    timestamp: new Date().toISOString(),
-    mongoConnection: mongoose.connection.readyState === 1
-  });
-});
-
-// Root endpoint
-app.get('/', (req, res) => {
-  res.json({
-    message: 'Chatr API is running',
-    environment: NODE_ENV,
-    timestamp: new Date().toISOString()
-  });
-});
-
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error('Global error handler:', err.stack);
@@ -219,5 +213,5 @@ app.use((err, req, res, next) => {
 // Start server
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running in ${NODE_ENV} mode on port ${PORT}`);
-  console.log('CORS origin:', corsOptions.origin);
+  console.log('CORS origin: *');
 }); 
